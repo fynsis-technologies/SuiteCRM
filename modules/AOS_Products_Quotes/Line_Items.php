@@ -55,6 +55,7 @@ function display_lines($focus, $field, $value, $view){
 
         require_once('modules/AOS_Products_Quotes/AOS_Products_Quotes.php');
         require_once('modules/AOS_Line_Item_Groups/AOS_Line_Item_Groups.php');
+        require_once('modules/pb_productbundles/pb_productbundles.php');
 
         $sql = "SELECT pg.id, pg.group_id FROM aos_products_quotes pg LEFT JOIN aos_line_item_groups lig ON pg.group_id = lig.id WHERE pg.parent_type = '".$focus->object_name."' AND pg.parent_id = '".$focus->id."' AND pg.deleted = 0 ORDER BY lig.number ASC, pg.number ASC";
 
@@ -88,6 +89,7 @@ function display_lines($focus, $field, $value, $view){
         $params = array('currency_id' => $focus->currency_id);
 
         $sql = "SELECT pg.id, pg.group_id FROM aos_products_quotes pg LEFT JOIN aos_line_item_groups lig ON pg.group_id = lig.id WHERE pg.parent_type = '".$focus->object_name."' AND pg.parent_id = '".$focus->id."' AND pg.deleted = 0 ORDER BY lig.number ASC, pg.number ASC";
+   
 
         $result = $focus->db->query($sql);
         $sep = get_number_seperators();
@@ -97,27 +99,32 @@ function display_lines($focus, $field, $value, $view){
         $i = 0;
         $productCount = 0;
         $serviceCount = 0;
+       
         $group_id = '';
         $groupStart = '';
         $groupEnd = '';
         $product = '';
+        $productbundle='';
         $service = '';
 
         while ($row = $focus->db->fetchByAssoc($result)) {
             $line_item = new AOS_Products_Quotes();
+
             $line_item->retrieve($row['id']);
 
 
             if($enable_groups && ($group_id != $row['group_id'] || $i == 0)){
-                $html .= $groupStart.$product.$service.$groupEnd;
+                $html .= $groupStart.$product.$service.$productbundle.$groupEnd;
                 if($i != 0)$html .= "<tr><td colspan='9' nowrap='nowrap'><br></td></tr>";
                 $groupStart = '';
                 $groupEnd = '';
                 $product = '';
+                $productbundle='';
                 $service = '';
                 $i = 1;
                 $productCount = 0;
                 $serviceCount = 0;
+                $productbundleCount=0;
                 $group_id = $row['group_id'];
 
                 $group_item = new AOS_Line_Item_Groups();
@@ -165,13 +172,61 @@ function display_lines($focus, $field, $value, $view){
                     $product .= "<td width='12%' class='tabDetailViewDL' style='text-align: right;padding:2px;' scope='row'>".$mod_strings['LBL_VAT_AMT']."</td>";
                     $product .= "<td width='12%' class='tabDetailViewDL' style='text-align: right;padding:2px;' scope='row'>".$mod_strings['LBL_TOTAL_PRICE']."</td>";
                     $product .= "</tr>";
+
+                    
                 }
+
 
                 $product .= "<tr>";
                 $product_note = wordwrap($line_item->description,40,"<br />\n");
                 $product .= "<td class='tabDetailViewDF' style='text-align: left; padding:2px;'>".++$productCount."</td>";
                 $product .= "<td class='tabDetailViewDF' style='padding:2px;'>".rtrim(rtrim(format_number($line_item->product_qty), '0'),$sep[1])."</td>";
-                $product .= "<td class='tabDetailViewDF' style='padding:2px;'><a href='index.php?module=AOS_Products&action=DetailView&record=".$line_item->product_id."' class='tabDetailViewDFLink'>".$line_item->name."</a><br />".$product_note."</td>";
+                 
+                 $sql3="SELECT * FROM aos_products WHERE id='".$line_item->product_id."'";
+                 
+                 $resultproduct = $focus->db->query($sql3);
+                  
+                foreach ($resultproduct as $value1)
+                {
+
+                   $valueproduct=$value1['id'];
+                  
+                }
+            if($valueproduct==$line_item->product_id)
+            {
+
+                $product .= "<td class='tabDetailViewDF' style='padding:2px;'>
+
+                <a href='index.php?module=AOS_Products&action=DetailView&record=".$line_item->product_id."' class='tabDetailViewDFLink'>".$line_item->name."</a>
+                
+                <br />".$product_note;                   
+            }
+
+            else
+           {
+
+                $product .= "<td class='tabDetailViewDF' style='padding:2px;'>
+
+                <a href='index.php?module=pb_productbundles&action=DetailView&record=".$line_item->product_id."' class='tabDetailViewDFLink'>".$line_item->name."</a>
+                
+                <br />".$product_note;
+            }
+               $sql2 = "SELECT *"
+
+               . "FROM pb_productbundles_aos_products_1_c t2\n"
+
+               . "LEFT JOIN pb_productbundles t3 ON t2.pb_productbundles_aos_products_1pb_productbundles_ida = t3.id \n"
+              
+               . "LEFT JOIN aos_products t1 ON t1.id = t2.pb_productbundles_aos_products_1aos_products_idb WHERE t3.id='$line_item->product_id' AND t1.deleted=0 ";
+               $result1 = $focus->db->query($sql2);
+
+        foreach ($result1 as $value) 
+        {
+              
+                $product .= "<li><a href='index.php?module=AOS_Products&action=DetailView&record=".$value['id']."' class='tabDetailViewDFLink'>".$value['name']."</li>";
+        }
+                $product .= "</td>";
+                 
                 $product .= "<td class='tabDetailViewDF' style='text-align: right; padding:2px;'>".currency_format_number($line_item->product_list_price,$params)."</td>";
 
                 $product .= "<td class='tabDetailViewDF' style='text-align: right; padding:2px;'>".get_discount_string($line_item->discount, $line_item->product_discount, $params, $locale, $sep)."</td>";
@@ -183,9 +238,11 @@ function display_lines($focus, $field, $value, $view){
                     $product .= "<td class='tabDetailViewDF' style='text-align: right; padding:2px;'>".format_number($line_item->vat)."%</td>";
                 }
                 $product .= "<td class='tabDetailViewDF' style='text-align: right; padding:2px;'>".currency_format_number($line_item->vat_amt,$params )."</td>";
+               
                 $product .= "<td class='tabDetailViewDF' style='text-align: right; padding:2px;'>".currency_format_number($line_item->product_total_price,$params )."</td>";
+               
                 $product .= "</tr>";
-            } else {
+               } else {
                 if($serviceCount == 0)
                 {
                     $service .= "<tr>";
